@@ -1,0 +1,12 @@
+[plugin-info]
+SHORT_PLUGIN_NAME = 'photoino'
+
+package-url = 'https://github.com/PyMoDAQ/pymodaq_plugins_photoino'
+description = 'some word about your plugin'
+
+author = 'Bernhard Lang'
+author-email = 'bernhard.lang@unige.ch'
+license = 'MIT'
+
+[plugin-install]
+packages-required = ['pymodaq>=4.0.0']
