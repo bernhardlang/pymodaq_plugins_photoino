@@ -4,15 +4,36 @@ from pymodaq.utils.parameter import Parameter
 from pymodaq.utils.data import DataFromPlugins, DataToExport
 import numpy as np
 
-class PhotoinoController:
 
-    pass
+class PhotoinoController:
+    """Controller class for interacting with photoino simulation."""
+
+    def __init__(self):
+        self._timebase = 1.
+        self._mean_count_rate = 100
+
+    @property
+    def count_rate(self):
+        return np.random.poisson(self._mean_count_rate)
+
+    @property
+    def mean_count_rate(self):
+        return self._mean_count_rate
+
+    @mean_count_rate.setter
+    def mean_count_rate(self, value: int):
+        if value < 0:
+            raise ValueError("count rate must be a positive number")
+        self._mean_count_rate = int(value)
 
 
 class DAQ_0DViewer_photoino(DAQ_Viewer_base):
     """PyMoDAQ plugin for controlling photoino single-photon counting module"""
 
-    params = comon_parameters
+    params = comon_parameters+[
+        {'title': 'Mean count rate:', 'name': 'mean_count_rate', 'type': 'int',
+         'min': 0},
+    ]
 
     def ini_attributes(self):
         self.controller: PhotoinoDriver = None
@@ -34,7 +55,9 @@ class DAQ_0DViewer_photoino(DAQ_Viewer_base):
             False if initialization failed otherwise True
         """
         self.ini_detector_init(old_controller=controller,
-                               new_controller=PhotoinoController)
+                               new_controller=PhotoinoController())
+
+        self.controller.mean_count_rate = self.settings['mean_count_rate']
 
         info = "photoino initialised"
         return info, True
@@ -42,6 +65,19 @@ class DAQ_0DViewer_photoino(DAQ_Viewer_base):
     def close(self):
         """Terminate the communication protocol"""
         pass
+
+    def commit_settings(self, param: Parameter):
+        """Apply the consequences of a change of value in the detector settings
+
+        Parameters
+        ----------
+        param: Parameter
+            A given parameter (within detector_settings) whose value has been 
+            changed by the user
+        """
+        if param.name() == "mean_count_rate":
+            self.controller.mean_count_rate = \
+                self.settings.child('mean_count_rate').value()
 
     def grab_data(self, Naverage=1, **kwargs):
         """Start a grab from the detector
@@ -56,7 +92,7 @@ class DAQ_0DViewer_photoino(DAQ_Viewer_base):
             others optionals arguments
         """
 
-        data = [np.array([0.0])]
+        data = [np.array([self.controller.count_rate])]
         data_to_emit = DataFromPlugins(name='Photon counter', data=data,
                                        dim='Data0D', labels=['Counts'],)
         self.data_grabed_signal.emit([data_to_emit])
