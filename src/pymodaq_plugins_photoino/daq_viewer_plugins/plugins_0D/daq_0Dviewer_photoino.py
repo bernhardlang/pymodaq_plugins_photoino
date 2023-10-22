@@ -2,6 +2,7 @@ from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, \
     comon_parameters, main
 from pymodaq.utils.parameter import Parameter
 from pymodaq.utils.data import DataFromPlugins, DataToExport
+import numpy as np
 
 class PhotoinoController:
 
