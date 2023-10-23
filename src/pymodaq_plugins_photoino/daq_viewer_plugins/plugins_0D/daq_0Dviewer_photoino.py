@@ -13,6 +13,14 @@ class PhotoinoController:
         self._mean_count_rate = 100
 
     @property
+    def timebase(self):
+        return self._timebase
+
+    @timebase.setter
+    def timebase(self, value):
+        self._timebase = value
+
+    @property
     def count_rate(self):
         return np.random.poisson(self._mean_count_rate)
 
@@ -31,6 +39,8 @@ class DAQ_0DViewer_photoino(DAQ_Viewer_base):
     """PyMoDAQ plugin for controlling photoino single-photon counting module"""
 
     params = comon_parameters+[
+        {'title': 'Timebase:', 'name': 'timebase', 'type': 'float', 'min': 0.1,
+         'max': 1e5},
         {'title': 'Mean count rate:', 'name': 'mean_count_rate', 'type': 'int',
          'min': 0},
     ]
@@ -57,6 +67,7 @@ class DAQ_0DViewer_photoino(DAQ_Viewer_base):
         self.ini_detector_init(old_controller=controller,
                                new_controller=PhotoinoController())
 
+        self.controller.timebase = self.settings['timebase']
         self.controller.mean_count_rate = self.settings['mean_count_rate']
 
         info = "photoino initialised"
@@ -75,7 +86,10 @@ class DAQ_0DViewer_photoino(DAQ_Viewer_base):
             A given parameter (within detector_settings) whose value has been 
             changed by the user
         """
-        if param.name() == "mean_count_rate":
+        if param.name() == "timebase":
+            self.controller.timebase = \
+                self.settings.child('timebase').value()
+        elif param.name() == "mean_count_rate":
             self.controller.mean_count_rate = \
                 self.settings.child('mean_count_rate').value()
 
