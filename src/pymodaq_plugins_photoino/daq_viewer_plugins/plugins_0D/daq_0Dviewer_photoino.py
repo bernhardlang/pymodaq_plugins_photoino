@@ -11,7 +11,7 @@ class PhotoinoController:
     """Controller class for interacting with photoino."""
 
     available_ports = \
-        [str(path) for path in list(Path('/dev/').glob('ttyACM*'))]
+        [str(path) for path in list(Path('/dev/').glob('ttyACM0'))]
 
     def open(self, port, baudrate):
         if port == '':
@@ -35,10 +35,10 @@ class PhotoinoController:
             self.ser = None
 
     def start(self):
-        self.ser.write(r'start\n')
+        self.ser.write('start\n'.encode())
 
     def stop(self):
-        self.ser.write(r'stop\n')
+        self.ser.write('stop\n'.encode())
 
     def receive_number(self):
         while True: # skip leading line breaks
@@ -59,60 +59,41 @@ class PhotoinoController:
         self.ser.write(str.encode('rate?\n'))
         return self.receive_number()
 
-
-class SimulatePhotoinoController:
-
-    def __init__(self):
-        self._timebase = 1.
-        self._trigger_level = 0.1
-        self._mean_count_rate = 100
-
-    @property
-    def timebase(self):
-        return self._timebase
-
-    @timebase.setter
-    def timebase(self, value):
-        self._timebase = value
-
     @property
     def trigger_level(self):
-        return self._trigger_level
-
+        self.ser.write(str.encode('level?\n'))
+        return self.receive_number()
+        
     @trigger_level.setter
     def trigger_level(self, value):
-        self._trigger_level = value
+        self.ser.write(str.encode('level %f\n' % value))
+
 
     @property
-    def count_rate(self):
-        return np.random.poisson(self._mean_count_rate)
-
-    @property
-    def mean_count_rate(self):
-        return self._mean_count_rate
-
-    @mean_count_rate.setter
-    def mean_count_rate(self, value: int):
-        if value < 0:
-            raise ValueError("count rate must be a positive number")
-        self._mean_count_rate = int(value)
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
+    def time_base(self):
+        self.ser.write(str.encode('timebase?\n'))
+        return self.receive_number()
+        
+    @time_base.setter
+    def time_base(self, value):
+        self.ser.write(str.encode('timebase %f\n' % value))
 
 
 class DAQ_0DViewer_photoino(DAQ_Viewer_base):
-    """PyMoDAQ plugin for controlling photoino single-photon counting module"""
+    """PyMoDAQ plugin for controlling photoino single-photon 
+       counting module"""
 
+    controller_type = PhotoinoController
     serial_ports = PhotoinoController.available_ports
 
     params = comon_parameters+[
         {'title': 'Serial port:', 'name': 'serial_port', 'type': 'str',
          'limits': serial_ports },
-        {'title': 'Baudrate:', 'name': 'baudrate', 'type': 'int', 'min': 0},
+        {'title': 'Baud rate:', 'name': 'baud_rate', 'type': 'int', 'min': 0},
+        {'title': 'Time base:', 'name': 'time_base', 'type': 'float',
+         'min': 0.1, 'max': 1e5},
+        {'title': 'Trigger level:', 'name': 'trigger_level', 'type': 'float',
+         'min': -5.0, 'max': 5.0},
     ]
 
     def ini_attributes(self):
@@ -133,14 +114,22 @@ class DAQ_0DViewer_photoino(DAQ_Viewer_base):
         initialized: bool
             False if initialization failed otherwise True
         """
-        self.ini_detector_init(old_controller=controller,
-                               new_controller=PhotoinoController())
 
+        import pdb
+        pdb.set_trace()
+        self.ini_detector_init(old_controller=controller,
+                               new_controller=self.controller_type())
         self.controller.open(self.settings['serial_port'],
-                             self.settings['baudrate'])
+                             self.settings['baud_rate'])
+
+        self.init_params()
 
         info = "photoino initialised"
         return info, True
+
+    def init_params(self):
+        self.controller.time_base = self.settings['time_base']
+        self.controller.trigger_level = self.settings['trigger_level']
 
     def close(self):
         self.controller.close()
@@ -154,7 +143,11 @@ class DAQ_0DViewer_photoino(DAQ_Viewer_base):
             A given parameter (within detector_settings) whose value has been 
             changed by the user
         """
-        pass # nothing to be passed to the board yet
+        if param.name() == "time_base":
+            self.controller.time_base = self.settings.child('time_base').value()
+        elif param.name() == "trigger_level":
+            self.controller.trigger_level = \
+                self.settings.child('trigger_level').value()
 
     def grab_data(self, Naverage=1, **kwargs):
         """Start a grab from the detector
@@ -175,47 +168,8 @@ class DAQ_0DViewer_photoino(DAQ_Viewer_base):
         self.data_grabed_signal.emit([data_to_emit])
 
     def stop(self):
-        self.controller.stop_grabbing()
+        self.controller.stop()
         return ''
-
-
-class DAQ_0DViewer_simulate_photoino(DAQ_0DViewer_photoino):
-    """PyMoDAQ plugin for simulating a photoino single-photon counting module"""
-
-    params = DAQ_0DViewer_photoino.params+[
-        {'title': 'Mean count rate:', 'name': 'mean_count_rate', 'type': 'int',
-         'min': 0},
-    ]
-
-    def ini_detector(self, controller=None):
-        """Detector communication initialization
-
-        Parameters
-        ----------
-        controller: (object)
-            custom object of a PyMoDAQ plugin (Slave case). None if only one 
-            actuator/detector by controller (Master case)
-
-        Returns
-        -------
-        info: str
-        initialized: bool
-            False if initialization failed otherwise True
-        """
-        self.ini_detector_init(old_controller=controller,
-                               new_controller=SimulatePhotoinoController())
-
-        self.controller.mean_count_rate = self.settings['mean_count_rate']
-
-        info = "photoino initialised"
-        return info, True
-
-    def commit_settings(self, param: Parameter):
-        if param.name() == "mean_count_rate":
-            self.controller.mean_count_rate = \
-                self.settings.child('mean_count_rate').value()
-        else:
-            DAQ_0DViewer_photoino.commit_settings(self, param)
 
 
 if __name__ == '__main__':
